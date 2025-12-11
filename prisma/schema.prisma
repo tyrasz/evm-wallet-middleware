@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  address   String   @unique
+  // Encrypted private key (stored as base64 or hex string)
+  encryptedPrivateKey String
+  // Initialization vector for encryption (needed for AES-GCM)
+  iv        String
+  // Optional label for the wallet
+  label     String?
+  // Chain type (e.g., "EVM") - allows future expansion
+  chainType String   @default("EVM")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions Transaction[]
+}
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  keyHash     String   @unique
+  prefix      String
+  role        String   // ADMIN, OPERATOR
+  description String?
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
+}
+
+model Transaction {
+  id        String   @id @default(uuid())
+  hash      String?  @unique // Nullable because we might create the record before broadcasting
+  from      String
+  to        String
+  value     String   // Stored as string to handle large integers (Wei)
+  data      String?
+  chainId   Int
+  status    String   // PENDING, MINED, FAILED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  walletId  String
+  wallet    Wallet   @relation(fields: [walletId], references: [id])
+}
