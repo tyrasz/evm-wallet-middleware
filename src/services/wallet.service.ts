@@ -49,7 +49,7 @@ export class WalletService {
         const account = privateKeyToAccount(privateKey);
 
         // 2. Encrypt private key
-        const { encryptedData, iv } = cryptoService.encrypt(privateKey);
+        const { encryptedData, iv } = await cryptoService.encrypt(privateKey);
 
         // 3. Store in DB
         const wallet = await this.prisma.wallet.create({
@@ -96,7 +96,7 @@ export class WalletService {
 
         if (!wallet) throw new Error(`Wallet not found: ${address} (normalized: ${checksumAddress})`);
 
-        const privateKey = cryptoService.decrypt(wallet.encryptedPrivateKey, wallet.iv);
+        const privateKey = await cryptoService.decrypt(wallet.encryptedPrivateKey, wallet.iv);
         // Ensure it has 0x prefix for viem
         const formattedKey = privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`;
 

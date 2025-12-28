@@ -12,35 +12,35 @@ import { CryptoService } from '../../src/services/crypto.service';
 describe('CryptoService', () => {
     const cryptoService = new CryptoService();
 
-    it('should encrypt and decrypt correctly', () => {
+    it('should encrypt and decrypt correctly', async () => {
         const originalText = 'my-secret-private-key';
-        const { encryptedData, iv } = cryptoService.encrypt(originalText);
+        const { encryptedData, iv } = await cryptoService.encrypt(originalText);
 
         expect(encryptedData).not.toBe(originalText);
         expect(iv).toBeDefined();
 
-        const decryptedText = cryptoService.decrypt(encryptedData, iv);
+        const decryptedText = await cryptoService.decrypt(encryptedData, iv);
         expect(decryptedText).toBe(originalText);
     });
 
-    it('should produce different outputs for same input (random IV)', () => {
+    it('should produce different outputs for same input (random IV)', async () => {
         const text = 'same-text';
-        const result1 = cryptoService.encrypt(text);
-        const result2 = cryptoService.encrypt(text);
+        const result1 = await cryptoService.encrypt(text);
+        const result2 = await cryptoService.encrypt(text);
 
         expect(result1.encryptedData).not.toBe(result2.encryptedData);
         expect(result1.iv).not.toBe(result2.iv);
     });
 
-    it('should fail if auth tag is modified', () => {
+    it('should fail if auth tag is modified', async () => {
         const text = 'sensitive-data';
-        const { encryptedData, iv } = cryptoService.encrypt(text);
+        const { encryptedData, iv } = await cryptoService.encrypt(text);
 
         // Tamper with the last byte (part of auth tag)
         const tamperedData = encryptedData.slice(0, -2) + '00';
 
-        expect(() => {
-            cryptoService.decrypt(tamperedData, iv);
-        }).toThrow();
+        await expect(async () => {
+            await cryptoService.decrypt(tamperedData, iv);
+        }).rejects.toThrow();
     });
 });
