@@ -4,6 +4,7 @@ import prismaPlugin from './plugins/prisma';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import walletRoutes from './routes/wallet.routes';
+import auditRoutes from './routes/audit.routes';
 
 export const buildApp = async () => {
     const app = Fastify({
@@ -39,6 +40,7 @@ export const buildApp = async () => {
 
     // Register Routes
     await app.register(walletRoutes, { prefix: '/api/v1' });
+    await app.register(auditRoutes, { prefix: '/api/v1' });
 
     return app;
 };

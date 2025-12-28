@@ -52,3 +52,16 @@ model Transaction {
   walletId  String
   wallet    Wallet   @relation(fields: [walletId], references: [id])
 }
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  entity    String
+  entityId  String
+  actor     String   // API Key Prefix or User ID
+  metadata  String?  // JSON stringified
+  ipAddress String?
+  userAgent String?
+  status    String   // 'SUCCESS', 'FAILURE'
+  createdAt DateTime @default(now())
+}

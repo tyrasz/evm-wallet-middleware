@@ -5,11 +5,14 @@ import { authMiddleware, requireRole } from '../middleware/auth.middleware';
 import { UserRole } from '../services/auth.service';
 import { chainService } from '../services/chain.service';
 
+import { AuditService } from '../services/audit.service';
+
 export default async function walletRoutes(fastify: FastifyInstance) {
     // Apply global auth middleware to all routes in this plugin
     fastify.addHook('preHandler', authMiddleware);
 
-    const walletService = new WalletService(fastify.prisma);
+    const auditService = new AuditService(fastify.prisma);
+    const walletService = new WalletService(fastify.prisma, auditService);
 
     const createWalletSchema = z.object({
         label: z.string().optional(),
@@ -39,7 +42,8 @@ export default async function walletRoutes(fastify: FastifyInstance) {
         }
     }, async (request, reply) => {
         const body = createWalletSchema.parse(request.body);
-        const wallet = await walletService.createWallet(body.label);
+        const actor = request.user?.apiKeyPrefix;
+        const wallet = await walletService.createWallet(body.label, actor);
         return {
             ...wallet,
             createdAt: wallet.createdAt.toISOString(),
@@ -183,9 +187,10 @@ export default async function walletRoutes(fastify: FastifyInstance) {
     }, async (request, reply) => {
         const { address } = request.params as { address: string };
         const { to, value } = request.body as { to: string; value: string };
+        const actor = request.user?.apiKeyPrefix;
 
         try {
-            const tx = await walletService.sendTransaction(address, to, value);
+            const tx = await walletService.sendTransaction(address, to, value, actor);
             return tx;
         } catch (error) {
             request.log.error(error);

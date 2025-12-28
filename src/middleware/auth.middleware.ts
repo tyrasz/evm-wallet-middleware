@@ -6,6 +6,7 @@ declare module 'fastify' {
     interface FastifyRequest {
         user?: {
             role: UserRole;
+            apiKeyPrefix: string;
         };
     }
 }
@@ -17,13 +18,16 @@ export const authMiddleware = async (request: FastifyRequest, reply: FastifyRepl
         return reply.status(401).send({ message: 'Missing API Key' });
     }
 
-    const role = await authService.validateApiKey(apiKey);
+    const result = await authService.validateApiKey(apiKey);
 
-    if (!role) {
+    if (!result) {
         return reply.status(401).send({ message: 'Invalid API Key' });
     }
 
-    request.user = { role };
+    request.user = {
+        role: result.role,
+        apiKeyPrefix: result.prefix
+    };
 };
 
 export const requireRole = (requiredRole: UserRole) => {

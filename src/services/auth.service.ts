@@ -43,9 +43,9 @@ export class AuthService {
     }
 
     /**
-     * Validates an API Key and returns the role if valid.
+     * Validates an API Key and returns the role and prefix if valid.
      */
-    async validateApiKey(rawKey: string): Promise<UserRole | null> {
+    async validateApiKey(rawKey: string): Promise<{ role: UserRole, prefix: string } | null> {
         const hash = this.hashKey(rawKey);
 
         const apiKey = await prisma.apiKey.findUnique({
@@ -60,7 +60,10 @@ export class AuthService {
             data: { lastUsedAt: new Date() }
         }).catch(err => console.error('Failed to update lastUsedAt', err));
 
-        return apiKey.role as UserRole;
+        return {
+            role: apiKey.role as UserRole,
+            prefix: apiKey.prefix
+        };
     }
 
     /**

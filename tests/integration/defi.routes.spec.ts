@@ -40,7 +40,7 @@ vi.mock('viem', async (importOriginal) => {
 
 // Mock authService
 vi.mock('../../src/services/auth.service', () => {
-    const mockValidate = vi.fn().mockResolvedValue('ADMIN');
+    const mockValidate = vi.fn().mockResolvedValue({ role: 'OPERATOR', prefix: 'test-operator' });
     const mockSeed = vi.fn();
     return {
         authService: {

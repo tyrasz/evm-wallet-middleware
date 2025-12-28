@@ -40,10 +40,16 @@ const ERC20_ABI = [
     }
 ] as const;
 
-export class WalletService {
-    constructor(private prisma: PrismaClient) { }
+import { AuditService } from './audit.service';
+import { AuditAction, AuditEntity } from '../constants/audit.constants';
 
-    async createWallet(label?: string) {
+export class WalletService {
+    constructor(
+        private prisma: PrismaClient,
+        private auditService: AuditService
+    ) { }
+
+    async createWallet(label?: string, actor?: string) {
         // 1. Generate private key
         const privateKey = generatePrivateKey();
         const account = privateKeyToAccount(privateKey);
@@ -60,6 +66,17 @@ export class WalletService {
                 label,
             },
         });
+
+        // 4. Audit Log
+        if (actor) {
+            await this.auditService.log(
+                AuditAction.WALLET_CREATE,
+                AuditEntity.WALLET,
+                wallet.id,
+                actor,
+                { label, address: wallet.address }
+            );
+        }
 
         // Return public info only
         return {
@@ -103,7 +120,7 @@ export class WalletService {
         return privateKeyToAccount(formattedKey as `0x${string}`);
     }
 
-    async sendTransaction(fromAddress: string, toAddress: string, value: string) {
+    async sendTransaction(fromAddress: string, toAddress: string, value: string, actor?: string) {
         const account = await this.getSigner(fromAddress);
 
         // Create transaction record
@@ -138,12 +155,36 @@ export class WalletService {
                 },
             });
 
+            if (actor) {
+                await this.auditService.log(
+                    AuditAction.TRANSACTION_SEND,
+                    AuditEntity.TRANSACTION,
+                    transaction.id,
+                    actor,
+                    { from: fromAddress, to: toAddress, value, hash }
+                );
+            }
+
             return updated;
         } catch (error) {
             await this.prisma.transaction.update({
                 where: { id: transaction.id },
                 data: { status: 'FAILED' },
             });
+
+            if (actor) {
+                await this.auditService.log(
+                    AuditAction.TRANSACTION_SEND,
+                    AuditEntity.TRANSACTION,
+                    transaction.id,
+                    actor,
+                    { from: fromAddress, to: toAddress, value, error: (error as Error).message },
+                    undefined,
+                    undefined,
+                    'FAILURE'
+                );
+            }
+
             throw error;
         }
     }
