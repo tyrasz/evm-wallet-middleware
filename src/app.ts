@@ -1,16 +1,28 @@
 import Fastify from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import { env } from './config/env';
 import prismaPlugin from './plugins/prisma';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import walletRoutes from './routes/wallet.routes';
 import auditRoutes from './routes/audit.routes';
+import healthRoutes from './routes/health.routes';
 
 export const buildApp = async () => {
     const app = Fastify({
         logger: {
             level: env.LOG_LEVEL,
         },
+    });
+
+    await app.register(rateLimit, {
+        max: 100, // 100 requests per minute
+        timeWindow: '1 minute',
+        errorResponseBuilder: (request: any, context: any) => ({
+            statusCode: 429,
+            error: 'Too Many Requests',
+            message: `Rate limit exceeded. Try again in ${context.after} seconds.`,
+        }),
     });
 
     // Register Plugins
@@ -41,6 +53,7 @@ export const buildApp = async () => {
     // Register Routes
     await app.register(walletRoutes, { prefix: '/api/v1' });
     await app.register(auditRoutes, { prefix: '/api/v1' });
+    await app.register(healthRoutes); // Root level /health
 
     return app;
 };
