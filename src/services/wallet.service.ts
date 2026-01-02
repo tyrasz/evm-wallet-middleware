@@ -42,11 +42,16 @@ const ERC20_ABI = [
 
 import { AuditService } from './audit.service';
 import { AuditAction, AuditEntity } from '../constants/audit.constants';
+import { PolicyService } from './policy.service';
+
+import { WebhookService } from './webhook.service';
 
 export class WalletService {
     constructor(
         private prisma: PrismaClient,
-        private auditService: AuditService
+        private auditService: AuditService,
+        private policyService: PolicyService,
+        private webhookService: WebhookService
     ) { }
 
     async createWallet(label?: string, actor?: string) {
@@ -135,6 +140,14 @@ export class WalletService {
             },
         });
 
+
+        // Policy Check
+        await this.policyService.evaluate({
+            amount: value,
+            toAddress,
+            walletId: transaction.walletId
+        });
+
         try {
             const client = createWalletClient({
                 account,
@@ -164,6 +177,17 @@ export class WalletService {
                     { from: fromAddress, to: toAddress, value, hash }
                 );
             }
+
+            // Webhook Dispatch
+            // We use 'fire-and-forget' so it doesn't block the response
+            this.webhookService.dispatch('TRANSACTION_SUBMITTED', {
+                transactionId: transaction.id,
+                hash,
+                from: fromAddress,
+                to: toAddress,
+                value,
+                status: 'SUBMITTED'
+            }).catch(err => console.error('Webhook dispatch error:', err));
 
             return updated;
         } catch (error) {

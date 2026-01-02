@@ -65,3 +65,22 @@ model AuditLog {
   status    String   // 'SUCCESS', 'FAILURE'
   createdAt DateTime @default(now())
 }
+
+model Policy {
+  id        String   @id @default(uuid())
+  type      String   // TRANSACTION_LIMIT, WHITELIST
+  config    String   // JSON string
+  scope     String   // GLOBAL, WALLET
+  entityId  String?  // Optional wallet UUID
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Webhook {
+  id        String   @id @default(uuid())
+  url       String
+  events    String   // JSON stringified array of events
+  secret    String?  // Optional secret
+  createdAt DateTime @default(now())
+}

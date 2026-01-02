@@ -6,13 +6,17 @@ import { UserRole } from '../services/auth.service';
 import { chainService } from '../services/chain.service';
 
 import { AuditService } from '../services/audit.service';
+import { PolicyService } from '../services/policy.service';
+import { WebhookService } from '../services/webhook.service';
 
 export default async function walletRoutes(fastify: FastifyInstance) {
     // Apply global auth middleware to all routes in this plugin
     fastify.addHook('preHandler', authMiddleware);
 
     const auditService = new AuditService(fastify.prisma);
-    const walletService = new WalletService(fastify.prisma, auditService);
+    const policyService = new PolicyService(fastify.prisma);
+    const webhookService = new WebhookService(fastify.prisma);
+    const walletService = new WalletService(fastify.prisma, auditService, policyService, webhookService);
 
     const createWalletSchema = z.object({
         label: z.string().optional(),
@@ -194,7 +198,7 @@ export default async function walletRoutes(fastify: FastifyInstance) {
             return tx;
         } catch (error) {
             request.log.error(error);
-            return reply.status(500).send({ message: 'Transaction failed' });
+            return reply.status(500).send({ message: 'Transaction failed', error: (error as Error).message });
         }
     });
 
