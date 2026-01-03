@@ -21,6 +21,7 @@ export default async function walletRoutes(fastify: FastifyInstance) {
     const createWalletSchema = z.object({
         label: z.string().optional(),
         privateKey: z.string().optional(),
+        mnemonic: z.string().optional(),
     });
 
     fastify.post('/wallets', {
@@ -31,7 +32,8 @@ export default async function walletRoutes(fastify: FastifyInstance) {
                 type: 'object',
                 properties: {
                     label: { type: 'string' },
-                    privateKey: { type: 'string' }
+                    privateKey: { type: 'string' },
+                    mnemonic: { type: 'string' }
                 }
             },
             response: {
@@ -47,13 +49,18 @@ export default async function walletRoutes(fastify: FastifyInstance) {
             }
         }
     }, async (request, reply) => {
-        const body = createWalletSchema.parse(request.body);
-        const actor = request.user?.apiKeyPrefix;
-        const wallet = await walletService.createWallet(body.label, actor, body.privateKey);
-        return {
-            ...wallet,
-            createdAt: wallet.createdAt.toISOString(),
-        };
+        try {
+            const body = createWalletSchema.parse(request.body);
+            const actor = request.user?.apiKeyPrefix;
+            const wallet = await walletService.createWallet(body.label, actor, body.privateKey, body.mnemonic);
+            return {
+                ...wallet,
+                createdAt: wallet.createdAt.toISOString(),
+            };
+        } catch (error) {
+            request.log.error(error);
+            return reply.status(400).send({ message: (error as Error).message });
+        }
     });
 
     fastify.get('/wallets', {

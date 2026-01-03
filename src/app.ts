@@ -12,6 +12,7 @@ import healthRoutes from './routes/health.routes';
 import { simulationRoutes } from './routes/simulation.routes';
 import { webhookRoutes } from './routes/webhook.routes';
 import { decoderRoutes } from './routes/decoder.routes';
+import tokenRoutes from './routes/token.routes';
 
 export const buildApp = async () => {
     const app = Fastify({
@@ -77,6 +78,7 @@ export const buildApp = async () => {
     await app.register(simulationRoutes, { prefix: '/api/v1' });
     await app.register(webhookRoutes, { prefix: '/api/v1' });
     await app.register(decoderRoutes, { prefix: '/api/v1' });
+    await app.register(tokenRoutes, { prefix: '/api/v1' });
     await app.register(healthRoutes); // Root level /health
 
     return app;

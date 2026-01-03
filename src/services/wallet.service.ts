@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { generatePrivateKey, privateKeyToAccount, hdKeyToAccount } from 'viem/accounts';
 import { createWalletClient, http, parseEther, encodeFunctionData, Hex, getAddress, formatUnits, parseUnits } from 'viem';
 import { sepolia } from 'viem/chains';
 import { env } from '../config/env';
@@ -54,22 +54,40 @@ export class WalletService {
         private webhookService: WebhookService
     ) { }
 
-    async createWallet(label?: string, actor?: string, importedKey?: string) {
+    async createWallet(label?: string, actor?: string, importedKey?: string, mnemonic?: string) {
         // 1. Generate or use imported private key
-        let privateKey = importedKey;
-        if (!privateKey) {
-            privateKey = generatePrivateKey();
-        } else {
-            // Basic validation
-            if (!privateKey.startsWith('0x')) {
-                privateKey = `0x${privateKey}`;
+        let secretToStore: string;
+        let account;
+
+        if (mnemonic) {
+            // Mnemonic Mode
+            const trimmedMnemonic = mnemonic.trim();
+            // We verify it produces a valid account
+            const { mnemonicToAccount } = await import('viem/accounts');
+            try {
+                account = mnemonicToAccount(trimmedMnemonic);
+            } catch (error) {
+                throw new Error(`Invalid mnemonic phrase: ${(error as Error).message}`);
             }
+            secretToStore = trimmedMnemonic; // We will encrypt the mnemonic itself
+        } else {
+            // Private Key Mode
+            let privateKey = importedKey;
+
+            if (!privateKey) {
+                privateKey = generatePrivateKey();
+            } else {
+                if (!privateKey.startsWith('0x')) {
+                    privateKey = `0x${privateKey}`;
+                }
+            }
+
+            account = privateKeyToAccount(privateKey as `0x${string}`);
+            secretToStore = privateKey;
         }
 
-        const account = privateKeyToAccount(privateKey as `0x${string}`);
-
-        // 2. Encrypt private key
-        const { encryptedData, iv } = await cryptoService.encrypt(privateKey);
+        // 2. Encrypt the secret (Key or Mnemonic)
+        const { encryptedData, iv } = await cryptoService.encrypt(secretToStore);
 
         // 3. Store in DB
         const wallet = await this.prisma.wallet.create({
@@ -88,7 +106,7 @@ export class WalletService {
                 AuditEntity.WALLET,
                 wallet.id,
                 actor,
-                { label, address: wallet.address }
+                { label, address: wallet.address, type: mnemonic ? 'mnemonic' : 'privateKey' }
             );
         }
 
@@ -148,11 +166,17 @@ export class WalletService {
 
         if (!wallet) throw new Error(`Wallet not found: ${address} (normalized: ${checksumAddress})`);
 
-        const privateKey = await cryptoService.decrypt(wallet.encryptedPrivateKey, wallet.iv);
-        // Ensure it has 0x prefix for viem
-        const formattedKey = privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`;
+        const decryptedSecret = await cryptoService.decrypt(wallet.encryptedPrivateKey, wallet.iv);
 
-        return privateKeyToAccount(formattedKey as `0x${string}`);
+        // Detect if it is a mnemonic (contains spaces)
+        if (decryptedSecret.includes(' ')) {
+            const { mnemonicToAccount } = await import('viem/accounts');
+            return mnemonicToAccount(decryptedSecret);
+        } else {
+            // Assume Private Key
+            const formattedKey = decryptedSecret.startsWith('0x') ? decryptedSecret : `0x${decryptedSecret}`;
+            return privateKeyToAccount(formattedKey as `0x${string}`);
+        }
     }
 
     async sendTransaction(fromAddress: string, toAddress: string, value: string, actor?: string) {

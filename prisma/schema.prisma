@@ -25,6 +25,28 @@ model Wallet {
   updatedAt DateTime @updatedAt
 
   transactions Transaction[]
+  tokens       WalletToken[]
+}
+
+model Token {
+  id        String   @id @default(uuid())
+  address   String   @unique
+  symbol    String
+  decimals  Int
+  chainId   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wallets   WalletToken[]
+}
+
+model WalletToken {
+  walletId  String
+  tokenId   String
+  wallet    Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  token     Token  @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+
+  @@id([walletId, tokenId])
 }
 
 model ApiKey {

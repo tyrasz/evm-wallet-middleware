@@ -3,6 +3,15 @@ import { useState, useEffect } from 'react';
 const API_URL = 'http://localhost:3000/api/v1';
 const API_KEY = 'dev-admin-key';
 
+
+interface Token {
+  id: string;
+  address: string;
+  symbol: string;
+  decimals: number;
+  balance: string;
+}
+
 interface Wallet {
   id: string;
   address: string;
@@ -51,12 +60,26 @@ function App() {
   // Wallet Form State
   const [newWalletLabel, setNewWalletLabel] = useState('');
   const [importMode, setImportMode] = useState(false);
-  const [importKey, setImportKey] = useState('');
+  const [importType, setImportType] = useState<'privateKey' | 'mnemonic'>('privateKey');
+  const [importValue, setImportValue] = useState('');
+
+  // Token Management State
+  const [walletTokens, setWalletTokens] = useState<Record<string, Token[]>>({});
+  const [expandingWalletId, setExpandingWalletId] = useState<string | null>(null);
+  const [newTokenAddress, setNewTokenAddress] = useState('');
 
   const createWallet = async () => {
-    if (!newWalletLabel) return;
+    if (!newWalletLabel) {
+      alert("Please enter a label for the wallet.");
+      return;
+    }
+    if (importMode && !importValue) {
+      alert("Please enter a Private Key or Mnemonic to import.");
+      return;
+    }
+
     try {
-      await fetch(`${API_URL}/wallets`, {
+      const res = await fetch(`${API_URL}/wallets`, {
         method: 'POST',
         headers: {
           'x-api-key': API_KEY,
@@ -64,15 +87,22 @@ function App() {
         },
         body: JSON.stringify({
           label: newWalletLabel,
-          privateKey: importMode ? importKey : undefined
+          privateKey: (importMode && importType === 'privateKey') ? importValue : undefined,
+          mnemonic: (importMode && importType === 'mnemonic') ? importValue : undefined
         })
       });
-      setNewWalletLabel(''); // Reset input
-      setImportKey('');
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Failed to create/import wallet');
+      }
+
+      setNewWalletLabel('');
+      setImportValue('');
       setImportMode(false);
       fetchWallets();
     } catch (err) {
-      alert("Failed to create wallet");
+      alert((err as Error).message);
     }
   };
 
@@ -115,6 +145,60 @@ function App() {
     }
   };
 
+  const fetchTokens = async (walletId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/wallets/${walletId}/tokens`, {
+        headers: { 'x-api-key': API_KEY }
+      });
+      const data = await res.json();
+      setWalletTokens(prev => ({ ...prev, [walletId]: data }));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addToken = async (walletId: string) => {
+    if (!newTokenAddress) return;
+    try {
+      const res = await fetch(`${API_URL}/wallets/${walletId}/tokens`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ tokenAddress: newTokenAddress })
+      });
+      if (!res.ok) throw new Error('Failed to add token');
+
+      setNewTokenAddress('');
+      fetchTokens(walletId);
+    } catch (e) {
+      alert('Failed to add token. Check address.');
+    }
+  };
+
+  const removeToken = async (walletId: string, tokenAddress: string) => {
+    if (!confirm('Stop watching this token?')) return;
+    try {
+      await fetch(`${API_URL}/wallets/${walletId}/tokens/${tokenAddress}`, {
+        method: 'DELETE',
+        headers: { 'x-api-key': API_KEY }
+      });
+      fetchTokens(walletId);
+    } catch (e) {
+      alert('Failed to remove token');
+    }
+  };
+
+  const toggleAssets = (walletId: string) => {
+    if (expandingWalletId === walletId) {
+      setExpandingWalletId(null);
+    } else {
+      setExpandingWalletId(walletId);
+      fetchTokens(walletId);
+    }
+  };
+
   return (
     <div className="container">
       <header className="header">
@@ -137,12 +221,12 @@ function App() {
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '1rem' }}>
                     <input type="checkbox" checked={importMode} onChange={e => setImportMode(e.target.checked)} id="chkImport" />
-                    <label htmlFor="chkImport" style={{ fontSize: '0.9em', cursor: 'pointer' }}>Import Private Key</label>
+                    <label htmlFor="chkImport" style={{ fontSize: '0.9em', cursor: 'pointer' }}>Import Existing</label>
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
                 <input
                   value={newWalletLabel}
                   onChange={e => setNewWalletLabel(e.target.value)}
@@ -151,20 +235,27 @@ function App() {
                 />
 
                 {importMode && (
-                  <input
-                    type="password"
-                    value={importKey}
-                    onChange={e => setImportKey(e.target.value)}
-                    placeholder="Private Key (0x...)"
-                    style={{ minWidth: '300px', margin: 0 }}
-                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <label><input type="radio" checked={importType === 'privateKey'} onChange={() => setImportType('privateKey')} /> Private Key</label>
+                      <label><input type="radio" checked={importType === 'mnemonic'} onChange={() => setImportType('mnemonic')} /> Mnemonic</label>
+                    </div>
+                    <input
+                      type={importType === 'privateKey' ? "password" : "text"}
+                      value={importValue}
+                      onChange={e => setImportValue(e.target.value)}
+                      placeholder={importType === 'privateKey' ? "0x..." : "12 words..."}
+                      style={{ minWidth: '350px', margin: 0 }}
+                    />
+                  </div>
                 )}
 
-                <button className="primary" onClick={createWallet} disabled={!newWalletLabel || (importMode && !importKey)}>
+                <button className="primary" onClick={createWallet}>
                   {importMode ? 'Import' : '+ Create'}
                 </button>
               </div>
             </div>
+
 
             {loading ? <p>Loading...</p> : (
               <div className="grid">
@@ -177,10 +268,62 @@ function App() {
                       )}
                     </div>
                     <code style={{ display: 'block', marginBottom: '0.5rem', wordBreak: 'break-all' }}>{w.address}</code>
-                    {w.balance && <div style={{ fontSize: '0.9em', color: 'var(--text-dim)', marginBottom: '1rem' }}>Balance: {w.balance} ETH</div>}
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button onClick={() => alert(`ID: ${w.id}`)}>Details</button>
+                    <div style={{ fontSize: '0.9em', color: 'var(--text-dim)', marginBottom: '1rem' }}>
+                      Native Balance: {w.balance} ETH
                     </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button onClick={() => alert(`ID: ${w.id}`)}>Details</button>
+                      <button className="secondary" onClick={() => toggleAssets(w.id)}>
+                        {expandingWalletId === w.id ? 'Hide Assets' : 'Manage Assets'}
+                      </button>
+                    </div>
+
+                    {expandingWalletId === w.id && (
+                      <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                        <h4>Watched Assets</h4>
+
+                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                          <input
+                            placeholder="Token Address (0x...)"
+                            value={newTokenAddress}
+                            onChange={e => setNewTokenAddress(e.target.value)}
+                            style={{ margin: 0, flex: 1 }}
+                          />
+                          <button onClick={() => addToken(w.id)} disabled={!newTokenAddress}>+ Watch</button>
+                        </div>
+
+                        {walletTokens[w.id]?.length > 0 ? (
+                          <table style={{ width: '100%', fontSize: '0.9em', textAlign: 'left' }}>
+                            <thead>
+                              <tr>
+                                <th>Symbol</th>
+                                <th>Balance</th>
+                                <th>Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {walletTokens[w.id].map(t => (
+                                <tr key={t.id}>
+                                  <td>{t.symbol}</td>
+                                  <td>{t.balance}</td>
+                                  <td>
+                                    <button
+                                      style={{ padding: '2px 6px', fontSize: '0.8em', backgroundColor: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger)' }}
+                                      onClick={() => removeToken(w.id, t.address)}
+                                    >
+                                      Remove
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <p style={{ fontSize: '0.9em', color: 'var(--text-dim)' }}>No tokens watched.</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
