@@ -20,6 +20,7 @@ export default async function walletRoutes(fastify: FastifyInstance) {
 
     const createWalletSchema = z.object({
         label: z.string().optional(),
+        privateKey: z.string().optional(),
     });
 
     fastify.post('/wallets', {
@@ -29,7 +30,8 @@ export default async function walletRoutes(fastify: FastifyInstance) {
             body: {
                 type: 'object',
                 properties: {
-                    label: { type: 'string' }
+                    label: { type: 'string' },
+                    privateKey: { type: 'string' }
                 }
             },
             response: {
@@ -47,7 +49,7 @@ export default async function walletRoutes(fastify: FastifyInstance) {
     }, async (request, reply) => {
         const body = createWalletSchema.parse(request.body);
         const actor = request.user?.apiKeyPrefix;
-        const wallet = await walletService.createWallet(body.label, actor);
+        const wallet = await walletService.createWallet(body.label, actor, body.privateKey);
         return {
             ...wallet,
             createdAt: wallet.createdAt.toISOString(),
@@ -67,7 +69,8 @@ export default async function walletRoutes(fastify: FastifyInstance) {
                             id: { type: 'string' },
                             address: { type: 'string' },
                             label: { type: 'string', nullable: true },
-                            createdAt: { type: 'string' }
+                            createdAt: { type: 'string' },
+                            balance: { type: 'string' }
                         }
                     }
                 }

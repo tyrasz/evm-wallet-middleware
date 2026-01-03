@@ -8,6 +8,7 @@ interface Wallet {
   address: string;
   label: string;
   createdAt: string;
+  balance?: string;
 }
 
 function App() {
@@ -37,7 +38,9 @@ function App() {
         headers: { 'x-api-key': API_KEY }
       });
       const data = await res.json();
-      if (Array.isArray(data)) setWallets(data);
+      if (Array.isArray(data)) {
+        setWallets(data);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -47,6 +50,8 @@ function App() {
 
   // Wallet Form State
   const [newWalletLabel, setNewWalletLabel] = useState('');
+  const [importMode, setImportMode] = useState(false);
+  const [importKey, setImportKey] = useState('');
 
   const createWallet = async () => {
     if (!newWalletLabel) return;
@@ -57,9 +62,14 @@ function App() {
           'x-api-key': API_KEY,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ label: newWalletLabel })
+        body: JSON.stringify({
+          label: newWalletLabel,
+          privateKey: importMode ? importKey : undefined
+        })
       });
       setNewWalletLabel(''); // Reset input
+      setImportKey('');
+      setImportMode(false);
       fetchWallets();
     } catch (err) {
       alert("Failed to create wallet");
@@ -121,8 +131,17 @@ function App() {
       <main>
         {activeTab === 'wallets' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h2>Managed Wallets</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2>Managed Wallets</h2>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '1rem' }}>
+                    <input type="checkbox" checked={importMode} onChange={e => setImportMode(e.target.checked)} id="chkImport" />
+                    <label htmlFor="chkImport" style={{ fontSize: '0.9em', cursor: 'pointer' }}>Import Private Key</label>
+                  </div>
+                </div>
+              </div>
+
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <input
                   value={newWalletLabel}
@@ -130,7 +149,20 @@ function App() {
                   placeholder="New Wallet Label"
                   style={{ minWidth: '200px', margin: 0 }}
                 />
-                <button className="primary" onClick={createWallet} disabled={!newWalletLabel}>+ Create</button>
+
+                {importMode && (
+                  <input
+                    type="password"
+                    value={importKey}
+                    onChange={e => setImportKey(e.target.value)}
+                    placeholder="Private Key (0x...)"
+                    style={{ minWidth: '300px', margin: 0 }}
+                  />
+                )}
+
+                <button className="primary" onClick={createWallet} disabled={!newWalletLabel || (importMode && !importKey)}>
+                  {importMode ? 'Import' : '+ Create'}
+                </button>
               </div>
             </div>
 
@@ -138,8 +170,14 @@ function App() {
               <div className="grid">
                 {wallets.map(w => (
                   <div key={w.id} className="card">
-                    <h3 style={{ marginTop: 0 }}>{w.label || 'Untitled Wallet'}</h3>
-                    <code style={{ display: 'block', marginBottom: '1rem', wordBreak: 'break-all' }}>{w.address}</code>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <h3 style={{ marginTop: 0 }}>{w.label || 'Untitled Wallet'}</h3>
+                      {w.balance && parseFloat(w.balance) < 0.1 && (
+                        <span className="status-badge status-danger" style={{ fontSize: '0.8em' }}>⚠️ Low Gas</span>
+                      )}
+                    </div>
+                    <code style={{ display: 'block', marginBottom: '0.5rem', wordBreak: 'break-all' }}>{w.address}</code>
+                    {w.balance && <div style={{ fontSize: '0.9em', color: 'var(--text-dim)', marginBottom: '1rem' }}>Balance: {w.balance} ETH</div>}
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button onClick={() => alert(`ID: ${w.id}`)}>Details</button>
                     </div>

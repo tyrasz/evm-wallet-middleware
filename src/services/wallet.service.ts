@@ -54,10 +54,19 @@ export class WalletService {
         private webhookService: WebhookService
     ) { }
 
-    async createWallet(label?: string, actor?: string) {
-        // 1. Generate private key
-        const privateKey = generatePrivateKey();
-        const account = privateKeyToAccount(privateKey);
+    async createWallet(label?: string, actor?: string, importedKey?: string) {
+        // 1. Generate or use imported private key
+        let privateKey = importedKey;
+        if (!privateKey) {
+            privateKey = generatePrivateKey();
+        } else {
+            // Basic validation
+            if (!privateKey.startsWith('0x')) {
+                privateKey = `0x${privateKey}`;
+            }
+        }
+
+        const account = privateKeyToAccount(privateKey as `0x${string}`);
 
         // 2. Encrypt private key
         const { encryptedData, iv } = await cryptoService.encrypt(privateKey);
@@ -93,10 +102,24 @@ export class WalletService {
     }
 
     async listWallets() {
-        // In a real app, we would paginate this
-        return this.prisma.wallet.findMany({
+        const wallets = await this.prisma.wallet.findMany({
             orderBy: { createdAt: 'desc' }
         });
+
+        // Enrich with balances
+        // Note: In production, doing this for ALL wallets is slow. Pagination is required.
+        return Promise.all(wallets.map(async (w) => {
+            let balance = '0';
+            try {
+                balance = await this.getBalance(w.address);
+            } catch (e) {
+                // Ignore balance fetch errors for list view
+            }
+            return {
+                ...w,
+                balance
+            };
+        }));
     }
 
     async getWallet(address: string) {

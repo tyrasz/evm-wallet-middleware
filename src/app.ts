@@ -45,6 +45,13 @@ export const buildApp = async () => {
     const { authService } = await import('./services/auth.service');
     await authService.seedDevKey();
 
+    // Start Gas Monitor
+    const { GasMonitorService } = await import('./services/gas-monitor.service');
+    const { WebhookService } = await import('./services/webhook.service');
+    const webhookService = new WebhookService(app.prisma);
+    const gasMonitor = new GasMonitorService(app.prisma, webhookService);
+    gasMonitor.start();
+
     await app.register(swagger, {
         swagger: {
             info: {
