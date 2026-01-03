@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { env } from './config/env';
 import prismaPlugin from './plugins/prisma';
@@ -10,6 +11,7 @@ import policyRoutes from './routes/policy.routes';
 import healthRoutes from './routes/health.routes';
 import { simulationRoutes } from './routes/simulation.routes';
 import { webhookRoutes } from './routes/webhook.routes';
+import { decoderRoutes } from './routes/decoder.routes';
 
 export const buildApp = async () => {
     const app = Fastify({
@@ -26,6 +28,14 @@ export const buildApp = async () => {
             error: 'Too Many Requests',
             message: `Rate limit exceeded. Try again in ${context.after} seconds.`,
         }),
+    });
+
+
+
+    await app.register(cors, {
+        origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+        allowedHeaders: ['Content-Type', 'x-api-key'],
     });
 
     // Register Plugins
@@ -59,6 +69,7 @@ export const buildApp = async () => {
     await app.register(policyRoutes, { prefix: '/api/v1' });
     await app.register(simulationRoutes, { prefix: '/api/v1' });
     await app.register(webhookRoutes, { prefix: '/api/v1' });
+    await app.register(decoderRoutes, { prefix: '/api/v1' });
     await app.register(healthRoutes); // Root level /health
 
     return app;

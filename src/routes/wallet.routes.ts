@@ -54,6 +54,35 @@ export default async function walletRoutes(fastify: FastifyInstance) {
         };
     });
 
+    fastify.get('/wallets', {
+        schema: {
+            tags: ['Wallets'],
+            summary: 'List all wallets',
+            response: {
+                200: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string' },
+                            address: { type: 'string' },
+                            label: { type: 'string', nullable: true },
+                            createdAt: { type: 'string' }
+                        }
+                    }
+                }
+            },
+            security: [{ apiKey: [] }]
+        },
+        preHandler: requireRole(UserRole.OPERATOR)
+    }, async (request, reply) => {
+        const wallets = await walletService.listWallets();
+        return wallets.map(w => ({
+            ...w,
+            createdAt: w.createdAt.toISOString()
+        }));
+    });
+
     fastify.get('/wallets/:address', {
         schema: {
             tags: ['Wallets'],

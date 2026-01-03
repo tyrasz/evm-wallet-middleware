@@ -92,6 +92,13 @@ export class WalletService {
         };
     }
 
+    async listWallets() {
+        // In a real app, we would paginate this
+        return this.prisma.wallet.findMany({
+            orderBy: { createdAt: 'desc' }
+        });
+    }
+
     async getWallet(address: string) {
         const wallet = await this.prisma.wallet.findUnique({
             where: { address },
