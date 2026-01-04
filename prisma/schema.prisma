@@ -106,3 +106,14 @@ model Webhook {
   secret    String?  // Optional secret
   createdAt DateTime @default(now())
 }
+
+model Proposal {
+  id        String   @id @default(uuid())
+  type      String   // TRANSACTION, POLICY_UPDATE, etc.
+  data      String   // JSON payload
+  status    String   // PENDING, APPROVED, REJECTED, EXECUTED, FAILED
+  creator   String   // API Key Prefix
+  approver  String?  // API Key Prefix
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

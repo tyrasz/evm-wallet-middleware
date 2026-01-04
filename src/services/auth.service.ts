@@ -6,7 +6,9 @@ const prisma = new PrismaClient();
 
 export enum UserRole {
     ADMIN = 'ADMIN',
-    OPERATOR = 'OPERATOR'
+    OPERATOR = 'OPERATOR',
+    MAKER = 'MAKER',
+    CHECKER = 'CHECKER'
 }
 
 export class AuthService {
@@ -86,6 +88,36 @@ export class AuthService {
                     prefix: devKey.substring(0, 8),
                     role: UserRole.ADMIN,
                     description: 'Auto-seeded development key'
+                }
+            });
+        }
+
+        // Seed Maker Key
+        const makerKey = 'dev-maker-key';
+        const makerHash = this.hashKey(makerKey);
+        if (!(await prisma.apiKey.findUnique({ where: { keyHash: makerHash } }))) {
+            console.log('🌱 Seeding development maker key: dev-maker-key');
+            await prisma.apiKey.create({
+                data: {
+                    keyHash: makerHash,
+                    prefix: makerKey.substring(0, 8),
+                    role: UserRole.MAKER,
+                    description: 'Auto-seeded maker key'
+                }
+            });
+        }
+
+        // Seed Checker Key
+        const checkerKey = 'dev-checker-key';
+        const checkerHash = this.hashKey(checkerKey);
+        if (!(await prisma.apiKey.findUnique({ where: { keyHash: checkerHash } }))) {
+            console.log('🌱 Seeding development checker key: dev-checker-key');
+            await prisma.apiKey.create({
+                data: {
+                    keyHash: checkerHash,
+                    prefix: checkerKey.substring(0, 8),
+                    role: UserRole.CHECKER,
+                    description: 'Auto-seeded checker key'
                 }
             });
         }

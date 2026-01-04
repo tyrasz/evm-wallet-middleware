@@ -13,6 +13,7 @@ import { simulationRoutes } from './routes/simulation.routes';
 import { webhookRoutes } from './routes/webhook.routes';
 import { decoderRoutes } from './routes/decoder.routes';
 import tokenRoutes from './routes/token.routes';
+import { proposalRoutes } from './routes/proposal.routes';
 
 export const buildApp = async () => {
     const app = Fastify({
@@ -30,8 +31,6 @@ export const buildApp = async () => {
             message: `Rate limit exceeded. Try again in ${context.after} seconds.`,
         }),
     });
-
-
 
     await app.register(cors, {
         origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
@@ -79,6 +78,7 @@ export const buildApp = async () => {
     await app.register(webhookRoutes, { prefix: '/api/v1' });
     await app.register(decoderRoutes, { prefix: '/api/v1' });
     await app.register(tokenRoutes, { prefix: '/api/v1' });
+    await app.register(proposalRoutes, { prefix: '/api/v1' });
     await app.register(healthRoutes); // Root level /health
 
     return app;

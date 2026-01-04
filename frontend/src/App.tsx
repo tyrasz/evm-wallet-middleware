@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 
 const API_URL = 'http://localhost:3000/api/v1';
-const API_KEY = 'dev-admin-key';
 
 
 interface Token {
@@ -21,7 +20,16 @@ interface Wallet {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'wallets' | 'simulate' | 'policy' | 'decode' | 'audit' | 'webhooks'>('wallets');
+  const [activeTab, setActiveTab] = useState<'wallets' | 'simulate' | 'policy' | 'decode' | 'audit' | 'webhooks' | 'approvals'>('wallets');
+
+  /* IAM State */
+  const [apiKey, setApiKey] = useState('dev-admin-key');
+  const [userRole, setUserRole] = useState('ADMIN');
+
+  /* Proposal State */
+  const [proposals, setProposals] = useState<any[]>([]);
+  const [proposalType, setProposalType] = useState('HIGH_VALUE_TRANSACTION');
+  const [proposalData, setProposalData] = useState('');
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -38,7 +46,73 @@ function App() {
 
   useEffect(() => {
     if (activeTab === 'wallets') fetchWallets();
-  }, [activeTab]);
+    if (activeTab === 'approvals') fetchProposals();
+  }, [activeTab, apiKey]);
+
+  const fetchProposals = async () => {
+    try {
+      const res = await fetch(`${API_URL}/proposals`, {
+        headers: { 'x-api-key': apiKey }
+      });
+      const data = await res.json();
+      setProposals(data);
+    } catch (e) {
+      console.error('Failed to fetch proposals', e);
+    }
+  };
+
+  const createProposal = async () => {
+    try {
+      const res = await fetch(`${API_URL}/proposals`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: proposalType,
+          data: JSON.parse(proposalData || '{}')
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Failed to create proposal');
+      }
+
+      setProposalData('');
+      fetchProposals();
+      alert('Proposal Created!');
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const approveProposal = async (id: string) => {
+    try {
+      const res = await fetch(`${API_URL}/proposals/${id}/approve`, {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey }
+      });
+      if (!res.ok) throw new Error('Failed to approve');
+      fetchProposals();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const rejectProposal = async (id: string) => {
+    try {
+      const res = await fetch(`${API_URL}/proposals/${id}/reject`, {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey }
+      });
+      if (!res.ok) throw new Error('Failed to reject');
+      fetchProposals();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
 
   /* Audit State */
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -52,7 +126,7 @@ function App() {
   const fetchAuditLogs = async () => {
     try {
       const res = await fetch(`${API_URL}/audit-logs?limit=50`, {
-        headers: { 'x-api-key': API_KEY }
+        headers: { 'x-api-key': apiKey }
       });
       const data = await res.json();
       setAuditLogs(data);
@@ -64,7 +138,7 @@ function App() {
   const fetchWebhooks = async () => {
     try {
       const res = await fetch(`${API_URL}/webhooks`, {
-        headers: { 'x-api-key': API_KEY }
+        headers: { 'x-api-key': apiKey }
       });
       const data = await res.json();
       setWebhooks(data);
@@ -84,7 +158,7 @@ function App() {
       const res = await fetch(`${API_URL}/webhooks`, {
         method: 'POST',
         headers: {
-          'x-api-key': API_KEY,
+          'x-api-key': apiKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -113,7 +187,7 @@ function App() {
     try {
       await fetch(`${API_URL}/webhooks/${id}`, {
         method: 'DELETE',
-        headers: { 'x-api-key': API_KEY }
+        headers: { 'x-api-key': apiKey }
       });
       fetchWebhooks();
     } catch (e) {
@@ -130,7 +204,7 @@ function App() {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/wallets`, {
-        headers: { 'x-api-key': API_KEY }
+        headers: { 'x-api-key': apiKey }
       });
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -168,7 +242,7 @@ function App() {
       const res = await fetch(`${API_URL}/wallets`, {
         method: 'POST',
         headers: {
-          'x-api-key': API_KEY,
+          'x-api-key': apiKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -197,7 +271,7 @@ function App() {
       const res = await fetch(`${API_URL}/simulate`, {
         method: 'POST',
         headers: {
-          'x-api-key': API_KEY,
+          'x-api-key': apiKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -219,7 +293,7 @@ function App() {
       const res = await fetch(`${API_URL}/decode`, {
         method: 'POST',
         headers: {
-          'x-api-key': API_KEY,
+          'x-api-key': apiKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ data: decodeData })
@@ -234,7 +308,7 @@ function App() {
   const fetchTokens = async (walletId: string) => {
     try {
       const res = await fetch(`${API_URL}/wallets/${walletId}/tokens`, {
-        headers: { 'x-api-key': API_KEY }
+        headers: { 'x-api-key': apiKey }
       });
       const data = await res.json();
       setWalletTokens(prev => ({ ...prev, [walletId]: data }));
@@ -249,7 +323,7 @@ function App() {
       const res = await fetch(`${API_URL}/wallets/${walletId}/tokens`, {
         method: 'POST',
         headers: {
-          'x-api-key': API_KEY,
+          'x-api-key': apiKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ tokenAddress: newTokenAddress })
@@ -268,7 +342,7 @@ function App() {
     try {
       await fetch(`${API_URL}/wallets/${walletId}/tokens/${tokenAddress}`, {
         method: 'DELETE',
-        headers: { 'x-api-key': API_KEY }
+        headers: { 'x-api-key': apiKey }
       });
       fetchTokens(walletId);
     } catch (e) {
@@ -297,7 +371,7 @@ function App() {
   const fetchPolicies = async () => {
     try {
       const res = await fetch(`${API_URL}/policies`, {
-        headers: { 'x-api-key': API_KEY }
+        headers: { 'x-api-key': apiKey }
       });
       const data = await res.json();
       setPolicies(data);
@@ -325,7 +399,7 @@ function App() {
       const res = await fetch(`${API_URL}/policies`, {
         method: 'POST',
         headers: {
-          'x-api-key': API_KEY,
+          'x-api-key': apiKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
@@ -350,7 +424,7 @@ function App() {
     try {
       await fetch(`${API_URL}/policies/${id}`, {
         method: 'DELETE',
-        headers: { 'x-api-key': API_KEY }
+        headers: { 'x-api-key': apiKey }
       });
       fetchPolicies();
     } catch (e) {
@@ -366,7 +440,28 @@ function App() {
     <div className="container">
       <header className="header">
         <div className="logo">EVM<span>//</span>MIDDLEWARE</div>
-        <div style={{ color: 'var(--text-dim)', fontSize: '0.9em' }}>Connected: ADMIN</div>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <div style={{ color: 'var(--text-dim)', fontSize: '0.9em' }}>Role:</div>
+          <select
+            value={userRole}
+            onChange={e => {
+              const role = e.target.value;
+              setUserRole(role);
+              if (role === 'ADMIN') setApiKey('dev-admin-key');
+              if (role === 'MAKER') setApiKey('dev-maker-key');
+              if (role === 'CHECKER') setApiKey('dev-checker-key');
+              // Refresh data
+              setWallets([]);
+              setActiveTab('wallets'); // Reset tab to safe default
+              setTimeout(() => fetchWallets(), 100);
+            }}
+            style={{ fontSize: '0.8em', padding: '2px 4px' }}
+          >
+            <option value="ADMIN">ADMIN</option>
+            <option value="MAKER">MAKER</option>
+            <option value="CHECKER">CHECKER</option>
+          </select>
+        </div>
       </header>
 
       <div className="tabs">
@@ -374,6 +469,7 @@ function App() {
         <button className={`tab ${activeTab === 'policy' ? 'active' : ''}`} onClick={() => setActiveTab('policy')}>Policies</button>
         <button className={`tab ${activeTab === 'audit' ? 'active' : ''}`} onClick={() => setActiveTab('audit')}>Audit</button>
         <button className={`tab ${activeTab === 'webhooks' ? 'active' : ''}`} onClick={() => setActiveTab('webhooks')}>Webhooks</button>
+        <button className={`tab ${activeTab === 'approvals' ? 'active' : ''}`} onClick={() => setActiveTab('approvals')}>Approvals</button>
         <button className={`tab ${activeTab === 'simulate' ? 'active' : ''}`} onClick={() => setActiveTab('simulate')}>Simulation</button>
         <button className={`tab ${activeTab === 'decode' ? 'active' : ''}`} onClick={() => setActiveTab('decode')}>Decoder</button>
       </div>
@@ -686,6 +782,150 @@ function App() {
                 </div>
               ))}
               {webhooks.length === 0 && <p style={{ color: 'var(--text-dim)' }}>No active webhooks.</p>}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'approvals' && (
+          <div>
+            {userRole === 'MAKER' && (
+              <div className="card" style={{ marginBottom: '2rem' }}>
+                <h2>Create Proposal</h2>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label>Type</label>
+                  <select value={proposalType} onChange={e => setProposalType(e.target.value)} style={{ width: '100%', marginTop: '0.5rem' }}>
+                    <option value="HIGH_VALUE_TRANSACTION">High Value Transaction</option>
+                    <option value="POLICY_UPDATE">Policy Update</option>
+                  </select>
+                </div>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label>Data (JSON)</label>
+                  <textarea
+                    value={proposalData}
+                    onChange={e => setProposalData(e.target.value)}
+                    placeholder='{"to": "0x...", "amount": "100"}'
+                    rows={3}
+                    style={{ marginTop: '0.5rem' }}
+                  />
+                </div>
+                <button className="primary" onClick={createProposal}>Submit Proposal</button>
+              </div>
+            )}
+
+            <h2>Pending Proposals</h2>
+            <div className="grid">
+              {proposals.map(p => (
+                <div key={p.id} className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <span className="status-badge" style={{ background: 'var(--primary)', color: '#fff' }}>{p.type}</span>
+                    <span className={`status-badge ${p.status === 'PENDING' ? 'status-warning' : p.status === 'EXECUTED' ? 'status-success' : 'status-danger'}`}>
+                      {p.status}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.9em', color: 'var(--text-dim)', marginBottom: '0.5rem' }}>
+                    Created by: {p.creator}
+                  </div>
+                  <pre style={{ background: '#000', padding: '0.5rem', fontSize: '0.8em', overflowX: 'auto' }}>
+                    {JSON.stringify(JSON.parse(p.data), null, 2)}
+                  </pre>
+
+                  {p.status === 'PENDING' && userRole === 'CHECKER' && (
+                    <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      <button
+                        className="primary"
+                        onClick={() => approveProposal(p.id)}
+                        style={{ fontSize: '0.9em', padding: '4px 12px' }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => rejectProposal(p.id)}
+                        style={{ background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger)', fontSize: '0.9em', padding: '4px 12px' }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                  {p.status === 'PENDING' && userRole !== 'CHECKER' && (
+                    <div style={{ marginTop: '1rem', fontSize: '0.9em', color: 'var(--text-dim)', textAlign: 'right' }}>
+                      <i>Waiting for Checker approval...</i>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {proposals.length === 0 && <p style={{ color: 'var(--text-dim)' }}>No proposals found.</p>}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'approvals' && (
+          <div>
+            {userRole === 'MAKER' && (
+              <div className="card" style={{ marginBottom: '2rem' }}>
+                <h2>Create Proposal</h2>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label>Type</label>
+                  <select value={proposalType} onChange={e => setProposalType(e.target.value)} style={{ width: '100%', marginTop: '0.5rem' }}>
+                    <option value="HIGH_VALUE_TRANSACTION">High Value Transaction</option>
+                    <option value="POLICY_UPDATE">Policy Update</option>
+                  </select>
+                </div>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label>Data (JSON)</label>
+                  <textarea
+                    value={proposalData}
+                    onChange={e => setProposalData(e.target.value)}
+                    placeholder='{"to": "0x...", "amount": "100"}'
+                    rows={3}
+                    style={{ marginTop: '0.5rem' }}
+                  />
+                </div>
+                <button className="primary" onClick={createProposal}>Submit Proposal</button>
+              </div>
+            )}
+
+            <h2>Pending Proposals</h2>
+            <div className="grid">
+              {proposals.map(p => (
+                <div key={p.id} className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <span className="status-badge" style={{ background: 'var(--primary)', color: '#fff' }}>{p.type}</span>
+                    <span className={`status-badge ${p.status === 'PENDING' ? 'status-warning' : p.status === 'EXECUTED' ? 'status-success' : 'status-danger'}`}>
+                      {p.status}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.9em', color: 'var(--text-dim)', marginBottom: '0.5rem' }}>
+                    Created by: {p.creator}
+                  </div>
+                  <pre style={{ background: '#000', padding: '0.5rem', fontSize: '0.8em', overflowX: 'auto' }}>
+                    {JSON.stringify(JSON.parse(p.data), null, 2)}
+                  </pre>
+
+                  {p.status === 'PENDING' && userRole === 'CHECKER' && (
+                    <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      <button
+                        className="primary"
+                        onClick={() => approveProposal(p.id)}
+                        style={{ fontSize: '0.9em', padding: '4px 12px' }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => rejectProposal(p.id)}
+                        style={{ background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger)', fontSize: '0.9em', padding: '4px 12px' }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                  {p.status === 'PENDING' && userRole !== 'CHECKER' && (
+                    <div style={{ marginTop: '1rem', fontSize: '0.9em', color: 'var(--text-dim)', textAlign: 'right' }}>
+                      <i>Waiting for Checker approval...</i>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {proposals.length === 0 && <p style={{ color: 'var(--text-dim)' }}>No proposals found.</p>}
             </div>
           </div>
         )}
