@@ -21,7 +21,7 @@ interface Wallet {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'wallets' | 'simulate' | 'policy' | 'decode'>('wallets');
+  const [activeTab, setActiveTab] = useState<'wallets' | 'simulate' | 'policy' | 'decode' | 'audit' | 'webhooks'>('wallets');
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -38,6 +38,92 @@ function App() {
 
   useEffect(() => {
     if (activeTab === 'wallets') fetchWallets();
+  }, [activeTab]);
+
+  /* Audit State */
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+
+  /* Webhook State */
+  const [webhooks, setWebhooks] = useState<any[]>([]);
+  const [newWebhookUrl, setNewWebhookUrl] = useState('');
+  const [newWebhookEvents, setNewWebhookEvents] = useState('');
+  const [newWebhookSecret, setNewWebhookSecret] = useState('');
+
+  const fetchAuditLogs = async () => {
+    try {
+      const res = await fetch(`${API_URL}/audit-logs?limit=50`, {
+        headers: { 'x-api-key': API_KEY }
+      });
+      const data = await res.json();
+      setAuditLogs(data);
+    } catch (e) {
+      console.error('Failed to fetch audit logs', e);
+    }
+  };
+
+  const fetchWebhooks = async () => {
+    try {
+      const res = await fetch(`${API_URL}/webhooks`, {
+        headers: { 'x-api-key': API_KEY }
+      });
+      const data = await res.json();
+      setWebhooks(data);
+    } catch (e) {
+      console.error('Failed to fetch webhooks', e);
+    }
+  };
+
+  const createWebhook = async () => {
+    if (!newWebhookUrl || !newWebhookEvents) {
+      alert('URL and Events are required');
+      return;
+    }
+
+    try {
+      const events = newWebhookEvents.split(',').map(e => e.trim()).filter(Boolean);
+      const res = await fetch(`${API_URL}/webhooks`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          url: newWebhookUrl,
+          events,
+          secret: newWebhookSecret || undefined
+        })
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to create webhook');
+      }
+
+      setNewWebhookUrl('');
+      setNewWebhookEvents('');
+      setNewWebhookSecret('');
+      fetchWebhooks();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const deleteWebhook = async (id: string) => {
+    if (!confirm('Delete this webhook?')) return;
+    try {
+      await fetch(`${API_URL}/webhooks/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-api-key': API_KEY }
+      });
+      fetchWebhooks();
+    } catch (e) {
+      alert('Failed to delete webhook');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'audit') fetchAuditLogs();
+    if (activeTab === 'webhooks') fetchWebhooks();
   }, [activeTab]);
 
   const fetchWallets = async () => {
@@ -199,6 +285,83 @@ function App() {
     }
   };
 
+  // Policy Management State
+  const [policies, setPolicies] = useState<any[]>([]);
+  const [policyType, setPolicyType] = useState('TRANSACTION_LIMIT');
+  const [policyScope, setPolicyScope] = useState('GLOBAL');
+  const [policyEntityId, setPolicyEntityId] = useState('');
+  // Config inputs
+  const [policyLimitAmount, setPolicyLimitAmount] = useState('');
+  const [policyWhitelistAddresses, setPolicyWhitelistAddresses] = useState('');
+
+  const fetchPolicies = async () => {
+    try {
+      const res = await fetch(`${API_URL}/policies`, {
+        headers: { 'x-api-key': API_KEY }
+      });
+      const data = await res.json();
+      setPolicies(data);
+    } catch (e) {
+      console.error('Failed to fetch policies', e);
+    }
+  };
+
+  const createPolicy = async () => {
+    try {
+      let config = {};
+      if (policyType === 'TRANSACTION_LIMIT') {
+        config = { maxAmount: policyLimitAmount };
+      } else if (policyType === 'WHITELIST') {
+        config = { addresses: policyWhitelistAddresses.split(',').map(a => a.trim()).filter(Boolean) };
+      }
+
+      const payload = {
+        type: policyType,
+        scope: policyScope,
+        entityId: policyScope === 'WALLET' ? policyEntityId : undefined,
+        config
+      };
+
+      const res = await fetch(`${API_URL}/policies`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Failed to create policy');
+      }
+
+      // Reset form
+      setPolicyLimitAmount('');
+      setPolicyWhitelistAddresses('');
+      fetchPolicies();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const deletePolicy = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this policy?')) return;
+    try {
+      await fetch(`${API_URL}/policies/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-api-key': API_KEY }
+      });
+      fetchPolicies();
+    } catch (e) {
+      alert('Failed to delete policy');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'policy') fetchPolicies();
+  }, [activeTab]);
+
   return (
     <div className="container">
       <header className="header">
@@ -208,6 +371,9 @@ function App() {
 
       <div className="tabs">
         <button className={`tab ${activeTab === 'wallets' ? 'active' : ''}`} onClick={() => setActiveTab('wallets')}>Wallets</button>
+        <button className={`tab ${activeTab === 'policy' ? 'active' : ''}`} onClick={() => setActiveTab('policy')}>Policies</button>
+        <button className={`tab ${activeTab === 'audit' ? 'active' : ''}`} onClick={() => setActiveTab('audit')}>Audit</button>
+        <button className={`tab ${activeTab === 'webhooks' ? 'active' : ''}`} onClick={() => setActiveTab('webhooks')}>Webhooks</button>
         <button className={`tab ${activeTab === 'simulate' ? 'active' : ''}`} onClick={() => setActiveTab('simulate')}>Simulation</button>
         <button className={`tab ${activeTab === 'decode' ? 'active' : ''}`} onClick={() => setActiveTab('decode')}>Decoder</button>
       </div>
@@ -329,6 +495,198 @@ function App() {
               </div>
             )}
             {wallets.length === 0 && !loading && <p style={{ color: 'var(--text-dim)' }}>No wallets found.</p>}
+          </div>
+        )}
+
+        {activeTab === 'policy' && (
+          <div>
+            <div className="card" style={{ marginBottom: '2rem' }}>
+              <h2>Create Policy</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div>
+                  <label>Type</label>
+                  <select value={policyType} onChange={e => setPolicyType(e.target.value)} style={{ width: '100%', marginTop: '0.5rem' }}>
+                    <option value="TRANSACTION_LIMIT">Transaction Limit</option>
+                    <option value="WHITELIST">Whitelist</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Scope</label>
+                  <select value={policyScope} onChange={e => setPolicyScope(e.target.value)} style={{ width: '100%', marginTop: '0.5rem' }}>
+                    <option value="GLOBAL">Global</option>
+                    <option value="WALLET">Wallet Specific</option>
+                  </select>
+                </div>
+              </div>
+
+              {policyScope === 'WALLET' && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <label>Wallet ID</label>
+                  <input
+                    value={policyEntityId}
+                    onChange={e => setPolicyEntityId(e.target.value)}
+                    placeholder="Enter Wallet UUID..."
+                    style={{ width: '100%', marginTop: '0.5rem' }}
+                  />
+                </div>
+              )}
+
+              <div style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--bg-sub)', borderRadius: '4px' }}>
+                {policyType === 'TRANSACTION_LIMIT' && (
+                  <div>
+                    <label>Max Amount (ETH)</label>
+                    <input
+                      value={policyLimitAmount}
+                      onChange={e => setPolicyLimitAmount(e.target.value)}
+                      placeholder="1.5"
+                      style={{ marginTop: '0.5rem' }}
+                    />
+                  </div>
+                )}
+                {policyType === 'WHITELIST' && (
+                  <div>
+                    <label>Allowed Addresses (comma separated)</label>
+                    <textarea
+                      value={policyWhitelistAddresses}
+                      onChange={e => setPolicyWhitelistAddresses(e.target.value)}
+                      placeholder="0x123..., 0xabc..."
+                      rows={3}
+                      style={{ marginTop: '0.5rem' }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <button className="primary" onClick={createPolicy}>Create Policy</button>
+            </div>
+
+            <div className="grid">
+              <div style={{ gridColumn: '1 / -1' }}><h3>Active Policies</h3></div>
+              {policies.map(p => (
+                <div key={p.id} className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <span className="status-badge status-success">{p.type}</span>
+                    <span className="status-badge" style={{ background: '#333' }}>{p.scope}</span>
+                  </div>
+                  {p.scope === 'WALLET' && <div style={{ fontSize: '0.8em', color: 'var(--text-dim)', marginBottom: '0.5rem' }}>Wallet: {p.entityId}</div>}
+
+                  <pre style={{ background: '#000', padding: '0.5rem', fontSize: '0.8em', overflowX: 'auto' }}>
+                    {JSON.stringify(JSON.parse(p.config), null, 2)}
+                  </pre>
+
+                  <div style={{ marginTop: '1rem', textAlign: 'right' }}>
+                    <button
+                      onClick={() => deletePolicy(p.id)}
+                      style={{ background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger)', fontSize: '0.8em', padding: '4px 8px' }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {policies.length === 0 && <p style={{ color: 'var(--text-dim)' }}>No active policies.</p>}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'audit' && (
+          <div>
+            <h2>Audit Logs</h2>
+            <div className="card" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ padding: '0.5rem' }}>Time</th>
+                    <th style={{ padding: '0.5rem' }}>Action</th>
+                    <th style={{ padding: '0.5rem' }}>Entity</th>
+                    <th style={{ padding: '0.5rem' }}>Entity ID</th>
+                    <th style={{ padding: '0.5rem' }}>Actor</th>
+                    <th style={{ padding: '0.5rem' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.map(log => (
+                    <tr key={log.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '0.5rem', fontSize: '0.9em', whiteSpace: 'nowrap' }}>{new Date(log.createdAt).toLocaleString()}</td>
+                      <td style={{ padding: '0.5rem' }}>{log.action}</td>
+                      <td style={{ padding: '0.5rem' }}><span className="status-badge" style={{ background: '#333' }}>{log.entity}</span></td>
+                      <td style={{ padding: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.8em' }}>{log.entityId}</td>
+                      <td style={{ padding: '0.5rem', fontSize: '0.9em' }}>{log.actor}</td>
+                      <td style={{ padding: '0.5rem' }}>
+                        <span className={`status-badge ${log.status === 'SUCCESS' ? 'status-success' : 'status-danger'}`}>
+                          {log.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {auditLogs.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-dim)' }}>No logs found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'webhooks' && (
+          <div>
+            <div className="card" style={{ marginBottom: '2rem' }}>
+              <h2>Register Webhook</h2>
+              <div style={{ marginBottom: '1rem' }}>
+                <label>Callback URL</label>
+                <input
+                  value={newWebhookUrl}
+                  onChange={e => setNewWebhookUrl(e.target.value)}
+                  placeholder="https://api.example.com/webhook"
+                  style={{ marginTop: '0.5rem' }}
+                />
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label>Events (comma separated)</label>
+                <input
+                  value={newWebhookEvents}
+                  onChange={e => setNewWebhookEvents(e.target.value)}
+                  placeholder="WALLET_CREATED, TRANSACTION_SENT"
+                  style={{ marginTop: '0.5rem' }}
+                />
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label>Secret (Optional)</label>
+                <input
+                  type="password"
+                  value={newWebhookSecret}
+                  onChange={e => setNewWebhookSecret(e.target.value)}
+                  placeholder="Signing secret"
+                  style={{ marginTop: '0.5rem' }}
+                />
+              </div>
+              <button className="primary" onClick={createWebhook}>Register Webhook</button>
+            </div>
+
+            <h3>Active Webhooks</h3>
+            <div className="grid">
+              {webhooks.map(wh => (
+                <div key={wh.id} className="card">
+                  <div style={{ wordBreak: 'break-all', fontWeight: 'bold', marginBottom: '0.5rem' }}>{wh.url}</div>
+                  <div style={{ marginBottom: '1rem' }}>
+                    {wh.events.map((ev: string) => (
+                      <span key={ev} className="status-badge" style={{ marginRight: '0.5rem' }}>{ev}</span>
+                    ))}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <button
+                      onClick={() => deleteWebhook(wh.id)}
+                      style={{ background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger)', fontSize: '0.8em', padding: '4px 8px' }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {webhooks.length === 0 && <p style={{ color: 'var(--text-dim)' }}>No active webhooks.</p>}
+            </div>
           </div>
         )}
 
