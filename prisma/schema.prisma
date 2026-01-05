@@ -26,6 +26,7 @@ model Wallet {
 
   transactions Transaction[]
   tokens       WalletToken[]
+  streams      Stream[]
 }
 
 model Token {
@@ -116,4 +117,20 @@ model Proposal {
   approver  String?  // API Key Prefix
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Stream {
+  id              String   @id @default(uuid())
+  walletId        String
+  receiverAddress String
+  tokenAddress    String
+  amountPerPeriod String
+  intervalSeconds Int
+  lastRunAt       DateTime?
+  nextRunAt       DateTime
+  status          String   // ACTIVE, PAUSED, COMPLETED, CANCELLED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  wallet          Wallet   @relation(fields: [walletId], references: [id])
 }

@@ -14,6 +14,8 @@ import { webhookRoutes } from './routes/webhook.routes';
 import { decoderRoutes } from './routes/decoder.routes';
 import tokenRoutes from './routes/token.routes';
 import { proposalRoutes } from './routes/proposal.routes';
+import stakingRoutes from './routes/staking.routes';
+import streamRoutes from './routes/stream.routes';
 
 export const buildApp = async () => {
     const app = Fastify({
@@ -52,6 +54,23 @@ export const buildApp = async () => {
     const gasMonitor = new GasMonitorService(app.prisma, webhookService);
     gasMonitor.start();
 
+    // Start Stream Scheduler
+    const { StreamService } = await import('./services/stream.service');
+    // We need to inject WalletService into StreamService.
+    const { WalletService } = await import('./services/wallet.service');
+    const { AuditService } = await import('./services/audit.service');
+    const { PolicyService } = await import('./services/policy.service');
+
+    // Instantiate dependencies for WalletService
+    const auditService = new AuditService(app.prisma);
+    const policyService = new PolicyService(app.prisma); // Note: PolicyService might use cache, ensure singleton if needed
+    // Actually, looking at wallet.routes.ts, it instantiates new services. 
+    // It seems they are stateless or leverage DB state.
+
+    const walletService = new WalletService(app.prisma, auditService, policyService, webhookService);
+    const streamService = new StreamService(app.prisma, walletService);
+    streamService.start();
+
     await app.register(swagger, {
         swagger: {
             info: {
@@ -79,6 +98,8 @@ export const buildApp = async () => {
     await app.register(decoderRoutes, { prefix: '/api/v1' });
     await app.register(tokenRoutes, { prefix: '/api/v1' });
     await app.register(proposalRoutes, { prefix: '/api/v1' });
+    await app.register(stakingRoutes, { prefix: '/api/v1' });
+    await app.register(streamRoutes, { prefix: '/api/v1' });
     await app.register(healthRoutes); // Root level /health
 
     return app;
